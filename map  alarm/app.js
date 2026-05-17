@@ -11,7 +11,7 @@
   // ═══════════════════════════════════════════════════════════════
   // Línea 14: Reemplaza con el dominio de tu broker MQTT en la nube
   //           Ejemplos: 'broker.hivemq.com', 'tu-vps.ejemplo.com'
-  const MQTT_HOST = 'broker.hivemq.com';
+  const MQTT_HOST = 'db72239584ec47deab6d2e788db07a49.s1.eu.hivemq.cloud';
 
   // Línea 17: Puerto para WebSockets con SSL/TLS
   //           HiveMQ Cloud: 8884 | Mosquitto con TLS: 8084 | EMQX: 8084
@@ -31,7 +31,9 @@
     url: `wss://${MQTT_HOST}:${MQTT_PORT}/mqtt`,
     topic: MQTT_TOPIC,
     opts: {
-      clientId: `beetle-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      protocol: 'wss',
+      port: MQTT_PORT,
+      clientId: 'beetle_monitor_' + Math.random().toString(16).substr(2, 8),
       clean: true,
       connectTimeout: 8000,
       reconnectPeriod: 5000,
