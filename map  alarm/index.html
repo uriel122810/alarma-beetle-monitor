@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Alarma Beetle Monitor — Sistema de monitoreo de alarmas en tiempo real." />
+  <title>Alarma Beetle Monitor</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪲</text></svg>" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+
+      <div class="sb-head">
+        <div class="sb-logo">🪲</div>
+        <div><h1>Alarma Beetle Monitor</h1><p class="sub">Monitoreo en tiempo real</p></div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats">
+        <div class="sc s-t" data-f="all" id="sc-t"><div class="v" id="vt">0</div><div class="l">Total</div></div>
+        <div class="sc s-s" data-f="safe" id="sc-s"><div class="v" id="vs">0</div><div class="l">Seguras</div></div>
+        <div class="sc s-a" data-f="active" id="sc-a"><div class="v" id="va">0</div><div class="l">Activas</div></div>
+      </div>
+
+      <!-- Filtered list -->
+      <div class="filt-sec" id="filt-sec"><div class="filt-wrap" id="filt-list"></div></div>
+
+      <!-- Options button -->
+      <div class="opt-sec"><button id="opt-btn" type="button">⚙ Opciones</button></div>
+
+      <!-- Options panel (integrated auth form, NO prompt) -->
+      <div class="opt-panel" id="opt-panel">
+        <div class="opt-inner">
+          <!-- Audio -->
+          <div class="og">
+            <div class="og-label">🔊 Audio de Alertas</div>
+            <div class="og-row">
+              <input type="range" min="0" max="100" value="70" class="vol-slider" id="vol-slider" />
+              <button class="btn-sm" id="mute-btn" type="button">🔇 Mute</button>
+            </div>
+          </div>
+          <!-- Auth (integrated password field) -->
+          <div class="og">
+            <div class="og-label">🔑 Acceso Administrador</div>
+            <div id="auth-zone">
+              <!-- Login form (shown when NOT admin) -->
+              <div id="auth-login">
+                <div class="auth-form">
+                  <div class="auth-row">
+                    <input type="password" class="auth-input" id="auth-pwd" placeholder="Contraseña..." />
+                    <button class="btn-login" id="auth-btn" type="button">Iniciar Sesión</button>
+                  </div>
+                  <div class="auth-msg" id="auth-msg"></div>
+                </div>
+              </div>
+              <!-- Active state (shown when admin IS active) -->
+              <div id="auth-active" style="display:none">
+                <div class="admin-active">
+                  <span>🔓 Modo Administrador Activado</span>
+                  <button class="btn-logout" id="logout-btn" type="button">Cerrar Sesión</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="hist-sec">
+        <div class="hist-head">
+          <h2>Historial de Eventos</h2>
+          <button id="clear-btn" type="button">Limpiar</button>
+        </div>
+        <div id="ev-list">
+          <div class="empty"><div class="ei">📡</div><p>Sin eventos registrados.<br>Los eventos aparecerán aquí en tiempo real.</p></div>
+        </div>
+      </div>
+
+      <div class="conn"><div class="cd" id="cd"></div><span id="ct">Conectando...</span></div>
+    </aside>
+
+    <button id="sb-tog" type="button">☰</button>
+
+    <main id="map-wrap">
+      <div class="map-ov"><div class="ld" id="ld"></div><span>MONITOREO EN VIVO</span></div>
+      <div id="map"></div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/mqtt@5.10.3/dist/mqtt.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
