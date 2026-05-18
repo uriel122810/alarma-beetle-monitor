@@ -124,8 +124,9 @@
   }
 
   function mkIco(st) {
+    const emoji = st === 'offline' ? '🔌' : (st === 'active' ? '🚨' : '🛡');
     return L.divIcon({
-      className: `am ${st}`, html: `<div class="mk">${st === 'active' ? '🚨' : '🛡'}</div>`,
+      className: `am ${st}`, html: `<div class="mk">${emoji}</div>`,
       iconSize: [MK, MK], iconAnchor: [MK/2, MK/2], popupAnchor: [0, -(MK/2+4)],
     });
   }
@@ -133,7 +134,7 @@
   function addAlarm(d) {
     const m = L.marker([d.lat, d.lng], { icon: mkIco('safe') }).addTo(map);
     m.bindPopup(() => popHtml(d.id), { maxWidth: 310, closeButton: true });
-    alarms[d.id] = { ...d, status: 'safe', ctrl: null, ts: null, marker: m };
+    alarms[d.id] = { ...d, status: 'safe', ctrl: null, ts: null, marker: m, lastSeen: Date.now() };
   }
 
   // ═══ GLOBAL DELETE — state-based confirm (stays visible in popup) ═══
@@ -174,12 +175,24 @@
   function popHtml(id) {
     const a = alarms[id];
     if (!a) return '<p>No encontrada</p>';
-    const sf = a.status === 'safe', c = sf ? 'safe' : 'active', ico = sf ? '🛡' : '🚨', lb = sf ? 'Seguro' : 'ACTIVADA';
+    
+    let c = 'safe', ico = '🛡', lb = 'Seguro';
+    if (a.status === 'active') {
+      c = 'active'; ico = '🚨'; lb = 'ACTIVADA';
+    } else if (a.status === 'offline') {
+      c = 'offline'; ico = '🔌'; lb = 'Sin Conexión';
+    }
+    
     let ex = '';
-    if (!sf && a.ctrl) {
+    if (a.status === 'active' && a.ctrl) {
       ex = `<div class="pr"><span class="pl">🎮 Control</span><span class="pv mono">${esc(a.ctrl)}</span></div>
             <div class="pr"><span class="pl">🕐 Hora</span><span class="pv mono">${fmtT(a.ts)}</span></div>`;
+    } else if (a.status === 'offline') {
+      ex = `<div class="pr" style="background: rgba(220,38,38,0.1); padding: 8px; border-radius: 6px; border: 1px solid rgba(220,38,38,0.25); margin-top: 6px; justify-content: center; align-items: center; gap: 6px;">
+              <span style="color: var(--red-lt); font-weight: 700; font-size: 0.75rem; text-transform: uppercase;">⚠️ Reparación Requerida</span>
+            </div>`;
     }
+    
     // Admin: show delete button OR confirm bar depending on state
     let del = '';
     if (admin) {
@@ -299,6 +312,9 @@
   // ═══ 8. ALARM HANDLER ═══
   function handleMsg(p) {
     const a = alarms[p.id_alarma]; if (!a) return;
+    const wasOffline = a.status === 'offline';
+    a.lastSeen = Date.now(); // reset keepalive timer
+    
     if (p.evento === 'activado') {
       a.status = 'active'; a.ctrl = p.control_remoto; a.ts = p.timestamp;
       a.marker.setIcon(mkIco('active'));
@@ -310,6 +326,12 @@
       a.status = 'safe'; a.ctrl = null; a.ts = null;
       a.marker.setIcon(mkIco('safe'));
       if (a.marker.isPopupOpen()) a.marker.getPopup().setContent(popHtml(a.id));
+    } else if (wasOffline || p.evento === 'keepalive') {
+      // Restore to safe state if it was offline
+      a.status = 'safe';
+      a.marker.setIcon(mkIco('safe'));
+      if (a.marker.isPopupOpen()) a.marker.getPopup().setContent(popHtml(a.id));
+      toast('🔌', `Alarma <strong>${esc(a.id)}</strong> restablecida (en línea)`);
     }
     updateStats(); renderFilt();
   }
@@ -332,9 +354,27 @@
 
   // ═══ 10. STATS ═══
   function updateStats() {
-    const all = Object.values(alarms), act = all.filter(a => a.status === 'active').length;
-    $vt.textContent = all.length; $vs.textContent = all.length - act; $va.textContent = act;
-    $sca.classList.toggle('has', act > 0);
+    const all = Object.values(alarms);
+    const act = all.filter(a => a.status === 'active').length;
+    const safe = all.filter(a => a.status === 'safe').length;
+    const off = all.filter(a => a.status === 'offline').length;
+    
+    const anyOffline = off > 0;
+    const $app = document.getElementById('app') || document.body;
+    
+    if (anyOffline) {
+      $app.classList.add('offline-mode');
+      $vt.textContent = all.length;
+      $vs.textContent = all.length - act - off; // only count safe online alarms
+      $va.textContent = 0; // Force to 0 when offline
+      $sca.classList.remove('has'); // Remove red pulse glow
+    } else {
+      $app.classList.remove('offline-mode');
+      $vt.textContent = all.length;
+      $vs.textContent = all.length - act;
+      $va.textContent = act;
+      $sca.classList.toggle('has', act > 0);
+    }
   }
 
   // ═══ 11. TOAST ═══
@@ -396,12 +436,42 @@
   initMap();
   connectMQTT();
 
+  // Watchdog timer (every 2 seconds)
+  function checkHeartbeats() {
+    const now = Date.now();
+    const TIMEOUT = 2 * 60 * 1000; // 2 minutes in ms
+    let anyChanged = false;
+    
+    Object.values(alarms).forEach(a => {
+      if (a.lastSeen) {
+        const elapsed = now - a.lastSeen;
+        if (elapsed > TIMEOUT && a.status !== 'offline') {
+          a.status = 'offline';
+          a.marker.setIcon(mkIco('offline'));
+          if (a.marker.isPopupOpen()) {
+            a.marker.getPopup().setContent(popHtml(a.id));
+          }
+          toast('🔌', `Alarma <strong>${esc(a.id)}</strong> fuera de línea (sin conexión)`);
+          anyChanged = true;
+        }
+      }
+    });
+    
+    if (anyChanged) {
+      updateStats();
+      renderFilt();
+    }
+  }
+  
+  setInterval(checkHeartbeats, 2000);
+
   window.__beetle = {
     alarms,
     simulateAlert(id, ctrl = 'Control_Test') { initAudio(); handleMsg({ id_alarma: id, evento: 'activado', control_remoto: ctrl, timestamp: new Date().toISOString() }); },
     simulateReset(id) { handleMsg({ id_alarma: id, evento: 'desactivado', control_remoto: null, timestamp: new Date().toISOString() }); },
+    simulateKeepalive(id) { handleMsg({ id_alarma: id, evento: 'keepalive', control_remoto: null, timestamp: new Date().toISOString() }); },
   };
 
-  console.log('%c[Beetle Monitor] 🪲 Inicializado', 'color:#dc2626;font-weight:bold');
+  console.log('%c[Beetle Monitor] 🪲 Inicializado con Monitoreo de Keepalive', 'color:#dc2626;font-weight:bold');
   console.log('%c[Tip] __beetle.simulateAlert("AL-01")', 'color:#707070');
 })();
