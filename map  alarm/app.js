@@ -51,13 +51,20 @@
 
   const ADMIN_PWD = 'admin mqtt';
   const STORE = 'beetleMonitor_v2';
+  const THEME_STORE = 'beetleMonitor_theme';
   const MK = 32;
+
+  // Tile layer URLs
+  const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+  const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
   // State
   const alarms = {};
   const confirmingDelete = new Set(); // tracks IDs pending delete confirmation
   let admin = false, mqttC = null, map = null, nextId = 5, curFilt = null;
   let audioCtx = null, oscNode = null, gainNode = null, muted = false, vol = 0.7;
+  let tileLayer = null; // current Leaflet tile layer
+  let currentTheme = localStorage.getItem(THEME_STORE) || 'dark';
 
   // DOM helpers
   const g = (id) => document.getElementById(id);
@@ -114,7 +121,8 @@
   // ═══ 3. MAP ═══
   function initMap() {
     map = L.map('map', { center: [23.6345, -102.5528], zoom: 5 });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    const tileUrl = currentTheme === 'light' ? TILE_LIGHT : TILE_DARK;
+    tileLayer = L.tileLayer(tileUrl, {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd', maxZoom: 19,
     }).addTo(map);
@@ -227,7 +235,7 @@
   function renderFilt() {
     if (!curFilt) return;
     const ls = Object.values(alarms).filter(a => curFilt === 'all' || a.status === curFilt);
-    $filtList.innerHTML = ls.length ? ls.map(a => `<div class="fi" data-id="${a.id}"><div class="fi-dot ${a.status}"></div><div><div class="fi-name">${esc(a.nombre)}</div><div class="fi-loc">${a.lat.toFixed(4)}, ${a.lng.toFixed(4)} · ${a.status === 'active' ? 'Activada' : 'Segura'}</div></div></div>`).join('') : '<div style="padding:14px;text-align:center;color:var(--text3);font-size:.78rem">Sin alarmas en esta categoría</div>';
+    $filtList.innerHTML = ls.length ? ls.map(a => `<div class="fi" data-id="${a.id}"><div class="fi-dot ${a.status}"></div><div><div class="fi-name">${esc(a.nombre)}</div><div class="fi-loc">${a.lat.toFixed(4)}, ${a.lng.toFixed(4)} · ${a.status === 'active' ? 'Activada' : (a.status === 'offline' ? 'Sin Conexión' : 'Segura')}</div></div></div>`).join('') : '<div style="padding:14px;text-align:center;color:var(--text3);font-size:.78rem">Sin alarmas en esta categoría</div>';
     $filtList.querySelectorAll('.fi').forEach(el => {
       el.addEventListener('click', () => { const a = alarms[el.dataset.id]; if (!a) return; map.flyTo([a.lat, a.lng], 10, { duration: 1 }); a.marker.openPopup(); if (window.innerWidth <= 900) g('sidebar').classList.remove('open'); });
     });
@@ -352,28 +360,26 @@
   }
   function clearHist() { $evl.innerHTML = '<div class="empty"><div class="ei">📡</div><p>Sin eventos registrados.<br>Los eventos aparecerán aquí en tiempo real.</p></div>'; }
 
-  // ═══ 10. STATS ═══
+  // ═══ 10. STATS (BUG FIX: always show real counts) ═══
   function updateStats() {
     const all = Object.values(alarms);
     const act = all.filter(a => a.status === 'active').length;
     const safe = all.filter(a => a.status === 'safe').length;
     const off = all.filter(a => a.status === 'offline').length;
-    
-    const anyOffline = off > 0;
     const $app = document.getElementById('app') || document.body;
-    
-    if (anyOffline) {
+
+    // Always show real counts — never force to 0
+    $vt.textContent = all.length;
+    $vs.textContent = safe;
+    $va.textContent = act;
+    $sca.classList.toggle('has', act > 0);
+
+    // offline-mode class: only for visual dimming when NO active alarms
+    // and at least one device is offline
+    if (act === 0 && off > 0) {
       $app.classList.add('offline-mode');
-      $vt.textContent = all.length;
-      $vs.textContent = all.length - act - off; // only count safe online alarms
-      $va.textContent = 0; // Force to 0 when offline
-      $sca.classList.remove('has'); // Remove red pulse glow
     } else {
       $app.classList.remove('offline-mode');
-      $vt.textContent = all.length;
-      $vs.textContent = all.length - act;
-      $va.textContent = act;
-      $sca.classList.toggle('has', act > 0);
     }
   }
 
@@ -394,7 +400,39 @@
     catch { return ts; }
   }
 
-  // ═══ 13. BINDINGS ═══
+  // ═══ 13. THEME TOGGLE ═══
+  function applyTheme(theme) {
+    currentTheme = theme;
+    const html = document.documentElement;
+
+    // Enable smooth transition
+    html.setAttribute('data-theme-transition', '');
+
+    if (theme === 'light') {
+      html.setAttribute('data-theme', 'light');
+      g('theme-btn').textContent = '☀️';
+    } else {
+      html.removeAttribute('data-theme');
+      g('theme-btn').textContent = '🌙';
+    }
+
+    // Swap map tile layer
+    if (map && tileLayer) {
+      const newUrl = theme === 'light' ? TILE_LIGHT : TILE_DARK;
+      tileLayer.setUrl(newUrl);
+    }
+
+    localStorage.setItem(THEME_STORE, theme);
+
+    // Remove transition class after animation completes
+    setTimeout(() => html.removeAttribute('data-theme-transition'), 400);
+  }
+
+  function toggleTheme() {
+    applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+  }
+
+  // ═══ 14. BINDINGS ═══
   // Stats
   document.querySelectorAll('.sc').forEach(c => c.addEventListener('click', () => onStatClick(c.dataset.f)));
 
@@ -429,10 +467,15 @@
   // Sidebar toggle
   g('sb-tog').addEventListener('click', () => g('sidebar').classList.toggle('open'));
 
+  // Theme toggle
+  g('theme-btn').addEventListener('click', toggleTheme);
+
   // Close sidebar on map click (mobile)
   document.getElementById('map').addEventListener('click', () => { if (window.innerWidth <= 900) g('sidebar').classList.remove('open'); });
 
-  // ═══ 14. INIT ═══
+  // ═══ 15. INIT ═══
+  // Apply saved theme BEFORE map init (so correct tiles load)
+  applyTheme(currentTheme);
   initMap();
   connectMQTT();
 

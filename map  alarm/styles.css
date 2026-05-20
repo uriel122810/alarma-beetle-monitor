@@ -19,6 +19,35 @@
   --grn-glow: rgba(34,197,94,0.35);
   --grn-bg: rgba(34,197,94,0.1);
   --shadow: 0 8px 32px rgba(0,0,0,0.45);
+  --toast-bg: var(--bg-panel);
+  --popup-attr-bg: rgba(20,20,20,.85);
+  --map-ov-bg: rgba(30,30,30,.85);
+  --conn-bg: rgba(0,0,0,.15);
+}
+
+[data-theme="light"] {
+  --bg-dark: #f0f2f5;
+  --bg-panel: #ffffff;
+  --bg-card: #f5f6f8;
+  --bg-hover: #e8eaed;
+  --bg-input: #f0f1f3;
+  --border: #dcdfe4;
+  --border-hi: #b0b5be;
+  --text: #1a1a2e;
+  --text2: #4a4a5a;
+  --text3: #8a8a9a;
+  --red: #dc2626;
+  --red-lt: #dc2626;
+  --red-glow: rgba(220,38,38,0.25);
+  --red-bg: rgba(220,38,38,0.08);
+  --grn: #16a34a;
+  --grn-glow: rgba(22,163,74,0.2);
+  --grn-bg: rgba(22,163,74,0.08);
+  --shadow: 0 8px 32px rgba(0,0,0,0.1);
+  --toast-bg: #ffffff;
+  --popup-attr-bg: rgba(255,255,255,.9);
+  --map-ov-bg: rgba(255,255,255,.88);
+  --conn-bg: rgba(0,0,0,.04);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
@@ -87,6 +116,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-dark);color:va
 .fi-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .fi-dot.safe{background:var(--grn);box-shadow:0 0 5px var(--grn-glow)}
 .fi-dot.active{background:var(--red);box-shadow:0 0 5px var(--red-glow);animation:db 1s infinite}
+.fi-dot.offline{background:#777;box-shadow:0 0 5px rgba(119,119,119,0.5)}
 @keyframes db{0%,100%{opacity:1}50%{opacity:.3}}
 .fi-name{font-size:.78rem;font-weight:600}.fi-loc{font-size:.65rem;color:var(--text3)}
 
@@ -155,7 +185,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-dark);color:va
 @keyframes si{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
 
 /* CONNECTION */
-.conn{padding:11px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:9px;font-size:.7rem;color:var(--text3);background:rgba(0,0,0,.15)}
+.conn{padding:11px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:9px;font-size:.7rem;color:var(--text3);background:var(--conn-bg)}
 .cd{width:7px;height:7px;border-radius:50%;background:var(--text3);transition:all .3s;flex-shrink:0}
 .cd.ok{background:var(--grn);box-shadow:0 0 7px var(--grn-glow);animation:dp 2s infinite}
 .cd.err{background:var(--red);box-shadow:0 0 7px var(--red-glow)}
@@ -164,7 +194,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-dark);color:va
 /* MAP */
 #map-wrap{flex:1;position:relative;overflow:hidden}
 #map{width:100%;height:100%}
-.map-ov{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:999;display:flex;align-items:center;gap:9px;padding:7px 16px;background:rgba(30,30,30,.85);border:1px solid var(--border);border-radius:9px;backdrop-filter:blur(10px)}
+.map-ov{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:999;display:flex;align-items:center;gap:9px;padding:7px 16px;background:var(--map-ov-bg);border:1px solid var(--border);border-radius:9px;backdrop-filter:blur(10px)}
 .map-ov .ld{width:6px;height:6px;border-radius:50%;background:var(--red);animation:dp 1.5s infinite}
 .map-ov .ld.ok{background:var(--grn)}
 .map-ov span{font-size:.7rem;font-weight:600;color:var(--text2);font-family:'JetBrains Mono',monospace;letter-spacing:.04em}
@@ -172,7 +202,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-dark);color:va
 /* Leaflet dark */
 .leaflet-control-zoom a{background:var(--bg-panel)!important;color:var(--text)!important;border-color:var(--border)!important}
 .leaflet-control-zoom a:hover{background:var(--bg-card)!important}
-.leaflet-control-attribution{background:rgba(20,20,20,.85)!important;color:var(--text3)!important;font-size:.58rem!important}
+.leaflet-control-attribution{background:var(--popup-attr-bg)!important;color:var(--text3)!important;font-size:.58rem!important}
 .leaflet-control-attribution a{color:var(--text3)!important}
 
 /* MARKERS */
@@ -202,7 +232,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-dark);color:va
 .pt{font-size:.88rem;font-weight:700}.pid{font-family:'JetBrains Mono',monospace;font-size:.66rem;color:var(--text3);margin-top:1px}
 .pb{padding:13px 16px}
 .pr{display:flex;align-items:center;justify-content:space-between;padding:5px 0}
-.pr:not(:last-child){border-bottom:1px solid rgba(255,255,255,.03)}
+.pr:not(:last-child){border-bottom:1px solid var(--border)}
 .pl{font-size:.7rem;color:var(--text3);font-weight:500}.pv{font-size:.73rem;font-weight:600}
 .pv.mono{font-family:'JetBrains Mono',monospace;font-size:.68rem}
 .pbdg{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:10px;font-size:.64rem;font-weight:600}
@@ -280,31 +310,74 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-dark);color:va
   background: #777777 !important;
 }
 
-/* Modo fuera de línea global para el dashboard (Gris Claro) */
-.offline-mode .sc.s-t .v,
-.offline-mode .sc.s-s .v,
-.offline-mode .sc.s-a .v {
-  color: #888888 !important;
+/*
+ * OFFLINE-MODE: Applied to #app ONLY when ALL devices are offline
+ * and NONE are active. Counter colors use NO !important so they
+ * can be instantly overridden when any device comes back online.
+ */
+.offline-mode .sc .v {
+  color: #888888;
   transition: color 0.3s ease;
 }
 
 .offline-mode .sc.s-a {
-  border-color: var(--border) !important;
-  animation: none !important;
-  box-shadow: none !important;
+  border-color: var(--border);
+  animation: none;
+  box-shadow: none;
 }
 
-/* Títulos de eventos y antena parábola en Gris Oscuro */
+/* When there ARE active alarms, force correct colors even inside offline-mode */
+.offline-mode .sc.s-a.has .v {
+  color: var(--red-lt);
+}
+.offline-mode .sc.s-a.has {
+  border-color: rgba(220,38,38,.3);
+  animation: sp 2s infinite;
+}
+
+/* Títulos de eventos y antena parábola en Gris */
 .offline-mode .hist-head h2 {
-  color: #555555 !important;
+  color: var(--text3);
   transition: color 0.3s ease;
 }
 .offline-mode .hist-head h2::before {
-  background: #555555 !important;
+  background: var(--text3);
   transition: background 0.3s ease;
 }
 .offline-mode .empty .ei {
-  color: #555555 !important;
+  color: var(--text3);
   opacity: 0.2;
   transition: color 0.3s ease;
+}
+
+/* ============================================ */
+/* THEME TOGGLE BUTTON                          */
+/* ============================================ */
+#theme-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text2);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+#theme-btn:hover {
+  border-color: var(--border-hi);
+  color: var(--text);
+  transform: rotate(20deg) scale(1.08);
+}
+
+/* Smooth global transition for theme changes */
+[data-theme-transition],
+[data-theme-transition] *,
+[data-theme-transition] *::before,
+[data-theme-transition] *::after {
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease !important;
 }
