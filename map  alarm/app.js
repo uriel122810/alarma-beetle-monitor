@@ -142,7 +142,7 @@
   function addAlarm(d) {
     const m = L.marker([d.lat, d.lng], { icon: mkIco('safe') }).addTo(map);
     m.bindPopup(() => popHtml(d.id), { maxWidth: 310, closeButton: true });
-    alarms[d.id] = { ...d, status: 'safe', ctrl: null, ts: null, marker: m, lastSeen: Date.now() };
+    alarms[d.id] = { ...d, status: 'safe', ctrl: null, ts: null, marker: m, lastSeen: null };
   }
 
   // ═══ GLOBAL DELETE — state-based confirm (stays visible in popup) ═══
@@ -486,7 +486,7 @@
     let anyChanged = false;
     
     Object.values(alarms).forEach(a => {
-      if (a.lastSeen) {
+      if (a.lastSeen !== null) {
         const elapsed = now - a.lastSeen;
         if (elapsed > TIMEOUT && a.status !== 'offline') {
           a.status = 'offline';

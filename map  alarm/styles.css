@@ -326,6 +326,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-dark);color:va
   box-shadow: none;
 }
 
+/* Preserve safe (green) counter color in offline-mode */
+.offline-mode .sc.s-s .v {
+  color: var(--grn);
+}
+
 /* When there ARE active alarms, force correct colors even inside offline-mode */
 .offline-mode .sc.s-a.has .v {
   color: var(--red-lt);
