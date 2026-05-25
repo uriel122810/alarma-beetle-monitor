@@ -1,10 +1,55 @@
 // ============================================
-// ALARMA BEETLE MONITOR — app.js
+// LOS REYES LA PAZ MONITOREO — app.js
+// Sistema de Seguridad Vecinal e Inteligencia Territorial
 // Producción: WebSockets Seguros (wss://)
 // All UI is inline HTML/CSS — NO prompt/alert
 // ============================================
 (() => {
   'use strict';
+
+  // Consola de errores visual en pantalla (para diagnosticar fallos en producción)
+  window.addEventListener('error', (event) => {
+    const dbg = document.getElementById('debug-err-console') || (() => {
+      const d = document.createElement('div');
+      d.id = 'debug-err-console';
+      d.style.cssText = 'position:fixed;bottom:60px;right:20px;z-index:99999;background:rgba(220,38,38,0.95);color:white;padding:12px 18px;border-radius:8px;font-family:monospace;font-size:0.75rem;box-shadow:0 4px 12px rgba(0,0,0,0.2);max-width:300px;word-break:break-all;border:1px solid rgba(255,255,255,0.2);pointer-events:none;';
+      document.body.appendChild(d);
+      return d;
+    })();
+    dbg.innerHTML += `<div>⚠️ Error: ${event.message} (${event.filename.split('/').pop()}:${event.lineno})</div>`;
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    const dbg = document.getElementById('debug-err-console') || (() => {
+      const d = document.createElement('div');
+      d.id = 'debug-err-console';
+      d.style.cssText = 'position:fixed;bottom:60px;right:20px;z-index:99999;background:rgba(220,38,38,0.95);color:white;padding:12px 18px;border-radius:8px;font-family:monospace;font-size:0.75rem;box-shadow:0 4px 12px rgba(0,0,0,0.2);max-width:300px;word-break:break-all;border:1px solid rgba(255,255,255,0.2);pointer-events:none;';
+      document.body.appendChild(d);
+      return d;
+    })();
+    dbg.innerHTML += `<div>⚠️ Rejection: ${event.reason}</div>`;
+  });
+
+  // Fallback robusto por si Turf.js falla en cargar desde CDN
+  if (typeof window.turf === 'undefined') {
+    window.turf = {
+      point(coords) {
+        return { type: 'Feature', geometry: { type: 'Point', coordinates: coords } };
+      },
+      booleanPointInPolygon(pt, poly) {
+        const [lng, lat] = pt.geometry.coordinates;
+        const ring = poly.geometry.coordinates[0];
+        let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+        for (const coord of ring) {
+          if (coord[0] < minLng) minLng = coord[0];
+          if (coord[0] > maxLng) maxLng = coord[0];
+          if (coord[1] < minLat) minLat = coord[1];
+          if (coord[1] > maxLat) maxLat = coord[1];
+        }
+        return lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat;
+      }
+    };
+  }
+
 
   // ═══════════════════════════════════════════════════════════════
   // ▼▼▼ CONFIGURACIÓN DE PRODUCCIÓN — MODIFICAR AQUÍ ▼▼▼
@@ -42,29 +87,69 @@
     },
   };
 
+  // Restricción Geográfica: Polígono simplificado de Los Reyes La Paz, Estado de México
+  const LA_PAZ_GEOJSON = {
+    "type": "Feature",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-98.99456, 19.33306],
+        [-98.89805, 19.33306],
+        [-98.89805, 19.39445],
+        [-98.99456, 19.39445],
+        [-98.99456, 19.33306]
+      ]]
+    }
+  };
+
   const ALARMAS_INICIALES = [
-    { id: 'AL-01', nombre: 'Alarma Central CU', lat: 19.3321, lng: -99.1894, altitud: 2260 },
-    { id: 'AL-02', nombre: 'Alarma Norte Monterrey', lat: 25.6866, lng: -100.3161, altitud: 540 },
-    { id: 'AL-03', nombre: 'Alarma Occidente GDL', lat: 20.6767, lng: -103.3473, altitud: 1566 },
-    { id: 'AL-04', nombre: 'Alarma Puerto Veracruz', lat: 19.1738, lng: -96.1342, altitud: 10 },
+    { id: 'AL-01', nombre: 'Alarma Centro La Paz', lat: 19.3600, lng: -98.9500, altitud: 2260 },
+    { id: 'AL-02', nombre: 'Alarma Los Reyes', lat: 19.3650, lng: -98.9800, altitud: 2250 },
+    { id: 'AL-03', nombre: 'Alarma San Sebastián', lat: 19.3500, lng: -98.9300, altitud: 2270 },
+    { id: 'AL-04', nombre: 'Alarma La Magdalena', lat: 19.3550, lng: -98.9600, altitud: 2240 },
   ];
 
   const ADMIN_PWD = 'admin mqtt';
   const STORE = 'beetleMonitor_v2';
+  const PLAN_STORE = 'beetleMonitor_plan';
   const THEME_STORE = 'beetleMonitor_theme';
+  const SETTINGS_STORE = 'beetleMonitor_settings';
+  const HISTORY_STORE = 'beetleMonitor_history';
+  const PANEL_STORE = 'beetleMonitor_panel';
   const MK = 32;
 
   // Tile layer URLs
   const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
   const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
+  // Safe Storage helper to prevent ReferenceError/SecurityError in private browsing or iframe environments
+  const safeStorage = {
+    getItem(key) {
+      try {
+        return localStorage.getItem(key);
+      } catch (_) {
+        return null;
+      }
+    },
+    setItem(key, value) {
+      try {
+        localStorage.setItem(key, value);
+      } catch (_) {}
+    }
+  };
+
   // State
   const alarms = {};
   const confirmingDelete = new Set(); // tracks IDs pending delete confirmation
   let admin = false, mqttC = null, map = null, nextId = 5, curFilt = null;
-  let audioCtx = null, oscNode = null, gainNode = null, muted = false, vol = 0.7;
+  // Load saved settings if any
+  let savedSettings = null;
+  try { savedSettings = JSON.parse(safeStorage.getItem(SETTINGS_STORE)); } catch(_) {}
+  let muted = savedSettings?.muted ?? false;
+  let vol = savedSettings?.vol ?? 0.7;
+  let audioCtx = null, oscNode = null, gainNode = null;
   let tileLayer = null; // current Leaflet tile layer
-  let currentTheme = localStorage.getItem(THEME_STORE) || 'dark';
+  let currentTheme = safeStorage.getItem(THEME_STORE) || 'light';
 
   // DOM helpers
   const g = (id) => document.getElementById(id);
@@ -74,16 +159,18 @@
   const $optPanel = g('opt-panel');
   const $authLogin = g('auth-login'), $authActive = g('auth-active');
   const $authPwd = g('auth-pwd'), $authMsg = g('auth-msg');
+  const $planPanel = g('plan-panel'), $planTbody = g('plan-tbody'), $planEmpty = g('plan-empty');
 
   // ═══ 1. PERSISTENCE ═══
   function load() {
-    const s = localStorage.getItem(STORE);
+    const s = safeStorage.getItem(STORE);
     if (s) { try { const a = JSON.parse(s); if (Array.isArray(a) && a.length) { a.forEach(x => { const n = parseInt(x.id.replace('AL-',''),10); if (!isNaN(n) && n >= nextId) nextId = n+1; }); return a; } } catch(_){} }
     return [...ALARMAS_INICIALES];
   }
   function save() {
-    localStorage.setItem(STORE, JSON.stringify(Object.values(alarms).map(a => ({ id:a.id, nombre:a.nombre, lat:a.lat, lng:a.lng, altitud:a.altitud }))));
+    safeStorage.setItem(STORE, JSON.stringify(Object.values(alarms).map(a => ({ id:a.id, nombre:a.nombre, lat:a.lat, lng:a.lng, altitud:a.altitud }))));
   }
+
 
   // ═══ 2. AUDIO ═══
   function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -120,14 +207,22 @@
 
   // ═══ 3. MAP ═══
   function initMap() {
-    map = L.map('map', { center: [23.6345, -102.5528], zoom: 5 });
+    // Center initially on La Paz, Zoom 13
+    map = L.map('map', { center: [19.36, -98.95], zoom: 13 });
     const tileUrl = currentTheme === 'light' ? TILE_LIGHT : TILE_DARK;
     tileLayer = L.tileLayer(tileUrl, {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: 'abcd', maxZoom: 19,
+      subdomains: 'abcd', maxZoom: 22, maxNativeZoom: 19
     }).addTo(map);
-    load().forEach(a => addAlarm(a));
+    
+    // Validate initial alarms against GeoJSON
+    load().forEach(a => {
+        if (turf.booleanPointInPolygon(turf.point([a.lng, a.lat]), LA_PAZ_GEOJSON)) addAlarm(a);
+    });
+    
     updateStats();
+    loadHistory(); // Render persisted history
+    
     map.on('dblclick', e => { if (!admin) return; e.originalEvent.preventDefault(); showAddModal(e.latlng.lat, e.latlng.lng); });
   }
 
@@ -237,7 +332,7 @@
     const ls = Object.values(alarms).filter(a => curFilt === 'all' || a.status === curFilt);
     $filtList.innerHTML = ls.length ? ls.map(a => `<div class="fi" data-id="${a.id}"><div class="fi-dot ${a.status}"></div><div><div class="fi-name">${esc(a.nombre)}</div><div class="fi-loc">${a.lat.toFixed(4)}, ${a.lng.toFixed(4)} · ${a.status === 'active' ? 'Activada' : (a.status === 'offline' ? 'Sin Conexión' : 'Segura')}</div></div></div>`).join('') : '<div style="padding:14px;text-align:center;color:var(--text3);font-size:.78rem">Sin alarmas en esta categoría</div>';
     $filtList.querySelectorAll('.fi').forEach(el => {
-      el.addEventListener('click', () => { const a = alarms[el.dataset.id]; if (!a) return; map.flyTo([a.lat, a.lng], 10, { duration: 1 }); a.marker.openPopup(); if (window.innerWidth <= 900) g('sidebar').classList.remove('open'); });
+      el.addEventListener('click', () => { const a = alarms[el.dataset.id]; if (!a) return; map.flyTo([a.lat, a.lng], 20, { duration: 1 }); a.marker.openPopup(); if (window.innerWidth <= 900) g('sidebar').classList.remove('open'); });
     });
   }
 
@@ -289,25 +384,69 @@
       const err = g('m-err');
       if (!name) { err.textContent = '✕ Escribe un nombre'; err.className = 'auth-msg err'; return; }
       if (isNaN(alt)) { err.textContent = '✕ Escribe una altitud válida'; err.className = 'auth-msg err'; return; }
+      // Check municipal limits before adding
+      if (!turf.booleanPointInPolygon(turf.point([lng, lat]), LA_PAZ_GEOJSON)) {
+         err.textContent = '✕ Ubicación fuera del municipio de La Paz'; err.className = 'auth-msg err'; return;
+      }
       const id = `AL-${String(nextId++).padStart(2, '0')}`;
       addAlarm({ id, nombre: name, lat, lng, altitud: alt });
       save(); updateStats(); renderFilt(); bg.remove();
       toast('✅', `Alarma <strong>${esc(id)}</strong> añadida`);
-      map.flyTo([lat, lng], 8, { duration: .8 });
+      map.flyTo([lat, lng], 20, { duration: .8 });
     };
   }
 
   // ═══ 7. MQTT ═══
+  let connectionAttempts = 0;
   function connectMQTT() {
     setC('wait');
+    const useFallback = connectionAttempts >= 2;
+    const host = useFallback ? 'broker.hivemq.com' : MQTT_HOST;
+    const port = useFallback ? 8884 : MQTT_PORT; 
+    const protocol = 'wss'; // Always use secure websockets
+    const url = `${protocol}://${host}:${port}/mqtt`;
+    
+    const opts = {
+      ...MQTT_CFG.opts,
+      protocol,
+      port,
+      username: useFallback ? undefined : MQTT_USER,
+      password: useFallback ? undefined : MQTT_PASS,
+    };
+    
     try {
-      mqttC = mqtt.connect(MQTT_CFG.url, MQTT_CFG.opts);
-      mqttC.on('connect', () => { setC('ok'); mqttC.subscribe(MQTT_CFG.topic, { qos: 1 }); });
+      if (mqttC) {
+        try { mqttC.end(); } catch(_) {}
+      }
+      mqttC = mqtt.connect(url, opts);
+      mqttC.on('connect', () => {
+        connectionAttempts = 0;
+        setC('ok');
+        mqttC.subscribe(MQTT_CFG.topic, { qos: 1 });
+      });
       mqttC.on('message', (_t, m) => { try { handleMsg(JSON.parse(m.toString())); } catch(_){} });
-      mqttC.on('error', () => setC('err'));
-      mqttC.on('close', () => setC('off'));
-      mqttC.on('reconnect', () => setC('wait'));
-    } catch(_) { setC('err'); }
+      mqttC.on('error', () => {
+        handleConnFailure();
+      });
+      mqttC.on('close', () => {
+        if (mqttC && !mqttC.connected) {
+          handleConnFailure();
+        } else {
+          setC('off');
+        }
+      });
+    } catch(_) {
+      handleConnFailure();
+    }
+  }
+
+  function handleConnFailure() {
+    setC('err');
+    connectionAttempts++;
+    if (connectionAttempts === 2) {
+      toast('⚠️', 'Conexión principal fallida. Probando broker alternativo público...');
+      setTimeout(connectMQTT, 2000);
+    }
   }
   function setC(s) {
     $cd.className = 'cd'; $ld.classList.remove('ok');
@@ -320,6 +459,10 @@
   // ═══ 8. ALARM HANDLER ═══
   function handleMsg(p) {
     const a = alarms[p.id_alarma]; if (!a) return;
+    
+    // Filter out if not in La Paz
+    if (!turf.booleanPointInPolygon(turf.point([a.lng, a.lat]), LA_PAZ_GEOJSON)) return;
+
     const wasOffline = a.status === 'offline';
     a.lastSeen = Date.now(); // reset keepalive timer
     
@@ -329,7 +472,7 @@
       if (a.marker.isPopupOpen()) a.marker.getPopup().setContent(popHtml(a.id));
       addEv(a); playSound();
       toast('🚨', `<strong>${esc(a.id)}</strong> activada — ${esc(a.nombre)}`);
-      map.flyTo([a.lat, a.lng], 7, { duration: 1.2 });
+      map.flyTo([a.lat, a.lng], 20, { duration: 1.2 });
     } else if (p.evento === 'desactivado') {
       a.status = 'safe'; a.ctrl = null; a.ts = null;
       a.marker.setIcon(mkIco('safe'));
@@ -345,7 +488,18 @@
   }
 
   // ═══ 9. EVENT HISTORY ═══
-  function addEv(a) {
+  let eventsData = [];
+  function saveHistory() { safeStorage.setItem(HISTORY_STORE, JSON.stringify(eventsData)); }
+  function loadHistory() {
+    try {
+       const h = JSON.parse(safeStorage.getItem(HISTORY_STORE));
+       if (Array.isArray(h)) {
+           h.reverse().forEach(ev => renderEvDOM(ev));
+           eventsData = h.reverse();
+       }
+    } catch(_) {}
+  }
+  function renderEvDOM(a) {
     $evl.querySelector('.empty')?.remove();
     const c = document.createElement('div'); c.className = 'ec alert';
     c.innerHTML = `<div class="ec-top"><span class="ec-id">${esc(a.id)}</span><span class="ec-badge">⚠ Activada</span></div>
@@ -355,10 +509,16 @@
       <div class="ec-d"><span class="el">Control:</span><span>${esc(a.ctrl || 'N/A')}</span></div>
       <div class="ec-t">🕐 ${fmtT(a.ts)}</div>`;
     c.style.cursor = 'pointer';
-    c.addEventListener('click', () => { map.flyTo([a.lat, a.lng], 10, { duration: 1 }); a.marker.openPopup(); });
+    c.addEventListener('click', () => { map.flyTo([a.lat, a.lng], 20, { duration: 1 }); alarms[a.id]?.marker?.openPopup(); });
     $evl.prepend(c);
   }
-  function clearHist() { $evl.innerHTML = '<div class="empty"><div class="ei">📡</div><p>Sin eventos registrados.<br>Los eventos aparecerán aquí en tiempo real.</p></div>'; }
+  function addEv(a) {
+    const evObj = { id: a.id, nombre: a.nombre, lat: a.lat, lng: a.lng, altitud: a.altitud, ctrl: a.ctrl, ts: a.ts };
+    eventsData.push(evObj);
+    saveHistory();
+    renderEvDOM(evObj);
+  }
+  function clearHist() { eventsData = []; saveHistory(); $evl.innerHTML = '<div class="empty"><div class="ei">📡</div><p>Sin eventos registrados.<br>Los eventos aparecerán aquí en tiempo real.</p></div>'; }
 
   // ═══ 10. STATS (BUG FIX: always show real counts) ═══
   function updateStats() {
@@ -422,7 +582,7 @@
       tileLayer.setUrl(newUrl);
     }
 
-    localStorage.setItem(THEME_STORE, theme);
+    safeStorage.setItem(THEME_STORE, theme);
 
     // Remove transition class after animation completes
     setTimeout(() => html.removeAttribute('data-theme-transition'), 400);
@@ -432,7 +592,145 @@
     applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
   }
 
-  // ═══ 14. BINDINGS ═══
+  // ═══════════════════════════════════════════════════════════════
+  // 14. PLANIFICACIÓN URBANA DE SEGURIDAD — Nueva Funcionalidad
+  // ═══════════════════════════════════════════════════════════════
+
+  // Datos de ejemplo precargados
+  const PLAN_DEFAULTS = [
+    { zona: 'Col. Los Reyes', prioridad: 'Alta', fecha: '2026-06-15', estado: 'Pendiente' },
+    { zona: 'Col. La Magdalena', prioridad: 'Media', fecha: '2026-07-01', estado: 'En Proceso' },
+    { zona: 'Col. Techachaltitla', prioridad: 'Alta', fecha: '2026-06-20', estado: 'Pendiente' },
+    { zona: 'Barrio San Sebastián', prioridad: 'Baja', fecha: '2026-08-10', estado: 'Pendiente' },
+    { zona: 'Col. Ampliación La Paz', prioridad: 'Media', fecha: '2026-07-15', estado: 'Instalado' },
+  ];
+
+  // Load planning data from localStorage or defaults
+  function loadPlan() {
+    const s = safeStorage.getItem(PLAN_STORE);
+    if (s) {
+      try {
+        const data = JSON.parse(s);
+        if (Array.isArray(data)) return data;
+      } catch (_) {}
+    }
+    return [...PLAN_DEFAULTS];
+  }
+
+  let planEntries = loadPlan();
+
+  function savePlan() {
+    safeStorage.setItem(PLAN_STORE, JSON.stringify(planEntries));
+  }
+
+  // Render the planning table
+  function renderPlanTable() {
+    if (planEntries.length === 0) {
+      $planTbody.innerHTML = '';
+      $planEmpty.style.display = 'flex';
+      return;
+    }
+    $planEmpty.style.display = 'none';
+
+    $planTbody.innerHTML = planEntries.map((e, idx) => {
+      // Priority badge class
+      const priClass = e.prioridad === 'Alta' ? 'alta' : (e.prioridad === 'Media' ? 'media' : 'baja');
+      // Estado badge class
+      let estClass = 'pendiente';
+      if (e.estado === 'En Proceso') estClass = 'proceso';
+      else if (e.estado === 'Instalado') estClass = 'instalado';
+
+      // Format date for display
+      let fechaDisplay = e.fecha;
+      try {
+        const d = new Date(e.fecha + 'T00:00:00');
+        fechaDisplay = d.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' });
+      } catch (_) {}
+
+      return `<tr>
+        <td><span class="plan-zona">${esc(e.zona)}</span></td>
+        <td><span class="plan-pri ${priClass}"><span class="pri-dot"></span>${esc(e.prioridad)}</span></td>
+        <td><span class="plan-fecha">${esc(fechaDisplay)}</span></td>
+        <td><span class="plan-est ${estClass}"><span class="est-dot"></span>${esc(e.estado)}</span></td>
+        <td><button class="plan-del" onclick="eliminarPlan(${idx})" title="Eliminar">✕</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Delete a planning entry
+  window.eliminarPlan = function(idx) {
+    if (idx >= 0 && idx < planEntries.length) {
+      const removed = planEntries.splice(idx, 1)[0];
+      savePlan();
+      renderPlanTable();
+      toast('📋', `Planificación <strong>${esc(removed.zona)}</strong> eliminada`);
+    }
+  };
+
+  // Show modal to add a new planning entry
+  function showAddPlanModal() {
+    document.querySelector('.modal-bg')?.remove();
+    const bg = document.createElement('div');
+    bg.className = 'modal-bg';
+    bg.innerHTML = `<div class="modal-box">
+      <h3>📋 Nueva Planificación de Alarma</h3>
+      <div class="plan-modal-field">
+        <label>Zona / Colonia</label>
+        <input type="text" id="pm-zona" placeholder="Ej: Col. San Juan" autofocus />
+      </div>
+      <div class="plan-modal-field">
+        <label>Prioridad</label>
+        <select id="pm-pri">
+          <option value="Alta">🔴 Alta</option>
+          <option value="Media" selected>🟡 Media</option>
+          <option value="Baja">🔵 Baja</option>
+        </select>
+      </div>
+      <div class="plan-modal-field">
+        <label>Fecha Programada de Instalación</label>
+        <input type="date" id="pm-fecha" />
+      </div>
+      <div class="plan-modal-field">
+        <label>Estado de Despliegue</label>
+        <select id="pm-estado">
+          <option value="Pendiente" selected>Pendiente</option>
+          <option value="En Proceso">En Proceso</option>
+          <option value="Instalado">Instalado</option>
+        </select>
+      </div>
+      <div id="pm-err" class="auth-msg"></div>
+      <div class="modal-btns">
+        <button class="mbno" id="pm-no" type="button">Cancelar</button>
+        <button class="mbok" id="pm-ok" type="button">Agregar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(bg);
+    bg.addEventListener('click', e => { if (e.target === bg) bg.remove(); });
+
+    // Set default date to today
+    const today = new Date().toISOString().split('T')[0];
+    g('pm-fecha').value = today;
+
+    g('pm-no').onclick = () => bg.remove();
+    g('pm-ok').onclick = () => {
+      const zona = g('pm-zona').value.trim();
+      const pri = g('pm-pri').value;
+      const fecha = g('pm-fecha').value;
+      const estado = g('pm-estado').value;
+      const err = g('pm-err');
+
+      if (!zona) { err.textContent = '✕ Escribe el nombre de la zona o colonia'; err.className = 'auth-msg err'; return; }
+      if (!fecha) { err.textContent = '✕ Selecciona una fecha programada'; err.className = 'auth-msg err'; return; }
+
+      planEntries.push({ zona, prioridad: pri, fecha, estado });
+      savePlan();
+      renderPlanTable();
+      bg.remove();
+      toast('✅', `Planificación <strong>${esc(zona)}</strong> agregada`);
+    };
+  }
+
+  // ═══ 15. BINDINGS ═══
   // Stats
   document.querySelectorAll('.sc').forEach(c => c.addEventListener('click', () => onStatClick(c.dataset.f)));
 
@@ -442,17 +740,72 @@
     $optPanel.classList.toggle('open');
   });
 
+  function saveSettings() {
+    safeStorage.setItem(SETTINGS_STORE, JSON.stringify({ muted, vol }));
+  }
+
+  // Volume synchronization helper
+  function updateVolume(newVolPercent) {
+    vol = newVolPercent / 100;
+    saveSettings();
+    if (gainNode) gainNode.gain.value = vol * 0.3;
+
+    // Sync admin slider
+    const sAdmin = g('vol-slider');
+    if (sAdmin) sAdmin.value = newVolPercent;
+
+    // Sync audio panel slider
+    const sAudio = g('vol-slider-audio');
+    if (sAudio) sAudio.value = newVolPercent;
+
+    // Sync volume display text
+    const textAudio = g('vol-value-audio');
+    if (textAudio) textAudio.textContent = `${newVolPercent}%`;
+  }
+
+  // Mute synchronization helper
+  function updateMuteState(isMuted) {
+    muted = isMuted;
+    saveSettings();
+
+    // Sync admin mute button
+    const mAdmin = g('mute-btn');
+    if (mAdmin) {
+      mAdmin.classList.toggle('on', muted);
+      mAdmin.textContent = muted ? '🔇 Muted' : '🔊 Mute';
+    }
+
+    // Sync audio panel mute button
+    const mAudio = g('mute-btn-audio');
+    if (mAudio) {
+      mAudio.classList.toggle('on', muted);
+      mAudio.textContent = muted ? '🔇 Muted' : '🔊 Mute';
+    }
+
+    // Sync bottom bar speaker button
+    const btnSpeaker = g('btn-speaker');
+    if (btnSpeaker) {
+      btnSpeaker.textContent = muted ? '🔇' : '🔊';
+    }
+
+    if (muted) {
+      stopSound();
+    }
+  }
+
   // Volume — live update + test beep on release
-  g('vol-slider').addEventListener('input', e => { vol = e.target.value / 100; if (gainNode) gainNode.gain.value = vol * 0.3; });
+  g('vol-slider').addEventListener('input', e => updateVolume(e.target.value));
   g('vol-slider').addEventListener('change', () => { playTestBeep(); });
 
+  g('vol-slider-audio')?.addEventListener('input', e => updateVolume(e.target.value));
+  g('vol-slider-audio')?.addEventListener('change', () => { playTestBeep(); });
+
   // Mute
-  g('mute-btn').addEventListener('click', function() {
-    muted = !muted;
-    this.classList.toggle('on', muted);
-    this.textContent = muted ? '🔇 Muted' : '🔊 Mute';
-    if (muted) stopSound();
-  });
+  g('mute-btn').addEventListener('click', () => updateMuteState(!muted));
+  g('mute-btn-audio')?.addEventListener('click', () => updateMuteState(!muted));
+
+  // Test beep inside audio panel
+  g('test-beep-btn-audio')?.addEventListener('click', () => playTestBeep());
 
   // Auth login (integrated, no prompt)
   g('auth-btn').addEventListener('click', doLogin);
@@ -470,14 +823,19 @@
   // Theme toggle
   g('theme-btn').addEventListener('click', toggleTheme);
 
+  // Planificación Urbana toggle
+  g('plan-btn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    $planPanel.classList.toggle('open');
+  });
+
+  // Add new plan entry
+  g('plan-add-btn').addEventListener('click', showAddPlanModal);
+
   // Close sidebar on map click (mobile)
   document.getElementById('map').addEventListener('click', () => { if (window.innerWidth <= 900) g('sidebar').classList.remove('open'); });
 
-  // ═══ 15. INIT ═══
-  // Apply saved theme BEFORE map init (so correct tiles load)
-  applyTheme(currentTheme);
-  initMap();
-  connectMQTT();
+
 
   // Watchdog timer (every 2 seconds)
   function checkHeartbeats() {
@@ -515,6 +873,113 @@
     simulateKeepalive(id) { handleMsg({ id_alarma: id, evento: 'keepalive', control_remoto: null, timestamp: new Date().toISOString() }); },
   };
 
-  console.log('%c[Beetle Monitor] 🪲 Inicializado con Monitoreo de Keepalive', 'color:#dc2626;font-weight:bold');
+  // ═══════════════════════════════════════════════════════════════
+  // 17. BOTTOM BAR — Digital Clock, Panel Toggles, Interactivity
+  // ═══════════════════════════════════════════════════════════════
+
+  // ── Digital Clock ──
+  function updateBarClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    const el = g('bar-clock');
+    if (el) el.textContent = `${h}:${m}:${s}`;
+  }
+  setInterval(updateBarClock, 1000);
+  updateBarClock();
+
+  // ── Panel Management ──
+  const PANELS = ['panel-history', 'panel-admin', 'panel-support', 'panel-about', 'panel-audio'];
+  const $overlay = g('panel-overlay');
+
+  function openPanel(id) {
+    // Close all panels first
+    PANELS.forEach(p => g(p)?.classList.remove('active'));
+    // Open requested panel
+    const panel = g(id);
+    if (panel) {
+      panel.classList.add('active');
+      $overlay.classList.add('active');
+      safeStorage.setItem(PANEL_STORE, id);
+    }
+  }
+
+  function closeAllPanels() {
+    PANELS.forEach(p => g(p)?.classList.remove('active'));
+    $overlay.classList.remove('active');
+    safeStorage.setItem(PANEL_STORE, '');
+  }
+
+  function togglePanel(id) {
+    const panel = g(id);
+    if (panel?.classList.contains('active')) {
+      closeAllPanels();
+    } else {
+      openPanel(id);
+    }
+  }
+
+  // ── Bottom Bar Button Listeners ──
+  g('btn-history')?.addEventListener('click', () => togglePanel('panel-history'));
+  g('btn-admin')?.addEventListener('click', () => togglePanel('panel-admin'));
+  g('btn-support')?.addEventListener('click', () => togglePanel('panel-support'));
+  g('btn-about')?.addEventListener('click', () => togglePanel('panel-about'));
+
+  // Speaker button — toggle audio panel
+  g('btn-speaker')?.addEventListener('click', () => togglePanel('panel-audio'));
+
+  // Overlay click closes all panels
+  $overlay?.addEventListener('click', closeAllPanels);
+
+  // Close buttons inside floating panels
+  document.querySelectorAll('.fp-close-btn').forEach(btn => {
+    btn.addEventListener('click', closeAllPanels);
+  });
+
+  // ── Keyboard: Escape closes panels ──
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeAllPanels();
+  });
+
+  // ═══ 16. INIT ═══
+  try {
+    applyTheme(currentTheme);
+  } catch (e) {
+    console.error('Error applying initial theme:', e);
+  }
+  
+  // Restore persisted settings to UI
+  updateVolume(Math.round(vol * 100));
+  updateMuteState(muted);
+
+  if (typeof L !== 'undefined') {
+    try {
+      initMap();
+    } catch (e) {
+      console.error('Error initializing Leaflet map:', e);
+    }
+  } else {
+    console.error('Leaflet library (L) is not defined.');
+  }
+
+  // Restore active panel if any
+  const savedPanel = safeStorage.getItem(PANEL_STORE);
+  if (savedPanel) openPanel(savedPanel);
+
+  if (typeof mqtt !== 'undefined') {
+    connectMQTT();
+  } else {
+    setC('err');
+    console.error('MQTT library is not defined.');
+  }
+
+  try {
+    renderPlanTable();
+  } catch (e) {
+    console.error('Error rendering urban safety plan table:', e);
+  }
+
+  console.log('%c[Los Reyes La Paz Monitoreo] 🏛 Sistema Inicializado', 'color:#8B1A2B;font-weight:bold');
   console.log('%c[Tip] __beetle.simulateAlert("AL-01")', 'color:#707070');
 })();

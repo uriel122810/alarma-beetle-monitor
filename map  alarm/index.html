@@ -3,22 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Alarma Beetle Monitor — Sistema de monitoreo de alarmas en tiempo real." />
-  <title>Alarma Beetle Monitor</title>
+  <meta name="description" content="Los Reyes La Paz Monitoreo — Sistema de Seguridad Vecinal para la administración pública municipal." />
+  <title>Los Reyes La Paz Monitoreo</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" type="image/png" href="logo.png" />
 </head>
 <body>
   <div id="app">
+    <!-- ═══ SIDEBAR ═══ -->
     <aside id="sidebar">
-
       <div class="sb-head" style="position:relative">
-        <button id="theme-btn" type="button" title="Cambiar tema" style="position:absolute;top:16px;right:16px">🌙</button>
+        <button id="theme-btn" type="button" title="Cambiar tema" style="position:absolute;top:12px;right:12px">☀️</button>
         <div class="sb-logo">
-          <img src="logo.png" alt="Logo" />
+          <img src="logo.png" alt="La Paz — Servir con amor y trabajo" class="logo-img" />
         </div>
-        <div><h1>Alarma Beetle Monitor</h1><p class="sub">Monitoreo en tiempo real</p></div>
+        <div>
+          <h1>Los Reyes La Paz Monitoreo</h1>
+          <p class="sub-inst">Sistema de Seguridad Vecinal</p>
+        </div>
       </div>
 
       <!-- Stats -->
@@ -28,73 +31,210 @@
         <div class="sc s-a" data-f="active" id="sc-a"><div class="v" id="va">0</div><div class="l">Activas</div></div>
       </div>
 
-      <!-- Filtered list -->
+      <!-- Filtered list (appears when a stat is clicked) -->
       <div class="filt-sec" id="filt-sec"><div class="filt-wrap" id="filt-list"></div></div>
 
-      <!-- Options button -->
-      <div class="opt-sec"><button id="opt-btn" type="button">⚙ Opciones</button></div>
+      <!-- Clean empty spacer (matches the reference image) -->
+      <div class="sidebar-spacer"></div>
 
-      <!-- Options panel (integrated auth form, NO prompt) -->
-      <div class="opt-panel" id="opt-panel">
-        <div class="opt-inner">
-          <!-- Audio -->
-          <div class="og">
-            <div class="og-label">🔊 Audio de Alertas</div>
-            <div class="og-row">
-              <input type="range" min="0" max="100" value="70" class="vol-slider" id="vol-slider" />
-              <button class="btn-sm" id="mute-btn" type="button">🔇 Mute</button>
-            </div>
-          </div>
-          <!-- Auth (integrated password field) -->
-          <div class="og">
-            <div class="og-label">🔑 Acceso Administrador</div>
-            <div id="auth-zone">
-              <!-- Login form (shown when NOT admin) -->
-              <div id="auth-login">
-                <div class="auth-form">
-                  <div class="auth-row">
-                    <input type="password" class="auth-input" id="auth-pwd" placeholder="Contraseña..." />
-                    <button class="btn-login" id="auth-btn" type="button">Iniciar Sesión</button>
-                  </div>
-                  <div class="auth-msg" id="auth-msg"></div>
-                </div>
-              </div>
-              <!-- Active state (shown when admin IS active) -->
-              <div id="auth-active" style="display:none">
-                <div class="admin-active">
-                  <span>🔓 Modo Administrador Activado</span>
-                  <button class="btn-logout" id="logout-btn" type="button">Cerrar Sesión</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- History -->
-      <div class="hist-sec">
-        <div class="hist-head">
-          <h2>Historial de Eventos</h2>
-          <button id="clear-btn" type="button">Limpiar</button>
-        </div>
-        <div id="ev-list">
-          <div class="empty"><div class="ei">📡</div><p>Sin eventos registrados.<br>Los eventos aparecerán aquí en tiempo real.</p></div>
-        </div>
-      </div>
-
+      <!-- Connection status at bottom -->
       <div class="conn"><div class="cd" id="cd"></div><span id="ct">Conectando...</span></div>
     </aside>
 
+    <!-- Mobile sidebar toggle -->
     <button id="sb-tog" type="button">☰</button>
 
+    <!-- ═══ MAP ═══ -->
     <main id="map-wrap">
       <div class="map-ov"><div class="ld" id="ld"></div><span>MONITOREO EN VIVO</span></div>
       <div id="map"></div>
     </main>
+
+    <!-- ═══ BOTTOM NAVIGATION BAR (GUINDA INSTITUCIONAL) ═══ -->
+    <nav id="bottom-bar">
+      <div class="bar-group bar-left">
+        <button id="btn-history" class="bar-btn" type="button">
+          &laquo; Ver Historial Completo
+        </button>
+      </div>
+      <div class="bar-group bar-center">
+        <button id="btn-admin" class="bar-btn bar-btn-primary" type="button">
+          ⚙ ADMINISTRAR SISTEMA
+        </button>
+        <button id="btn-speaker" class="bar-btn bar-btn-icon" type="button" title="Audio">🔊</button>
+      </div>
+      <div class="bar-group bar-right">
+        <button id="btn-support" class="bar-btn" type="button">? Soporte Técnico</button>
+        <button id="btn-about" class="bar-btn" type="button">i Acerca de</button>
+        <span class="bar-sep"></span>
+        <span class="bar-operator" id="bar-operator">Administrador - Operador</span>
+        <span class="bar-signal" id="bar-signal" title="Estado de red">📶</span>
+        <span class="bar-clock" id="bar-clock">00:00:00</span>
+      </div>
+    </nav>
+    <!-- Hidden elements for backward-compatible JS bindings -->
+    <div style="display:none" aria-hidden="true">
+      <button id="opt-btn" type="button"></button>
+      <div id="opt-panel"></div>
+      <button id="plan-btn" type="button"></button>
+    </div>
   </div>
+
+  <!-- ═══ OVERLAY FOR FLOATING PANELS ═══ -->
+  <div id="panel-overlay"></div>
+
+  <!-- ═══ FLOATING PANEL: HISTORIAL DE EVENTOS ═══ -->
+  <div id="panel-history" class="floating-panel fp-left">
+    <div class="fp-header">
+      <h2>📋 Historial de Eventos</h2>
+      <div class="fp-header-actions">
+        <button id="clear-btn" type="button" class="fp-action-btn">🗑 Limpiar</button>
+        <button class="fp-close-btn" data-close="panel-history" type="button">✕</button>
+      </div>
+    </div>
+    <div class="fp-body fp-scroll" id="ev-list">
+      <div class="empty"><div class="ei">📡</div><p>Sin eventos registrados.<br>Los eventos aparecerán aquí en tiempo real.</p></div>
+    </div>
+  </div>
+
+  <!-- ═══ FLOATING PANEL: ADMINISTRAR SISTEMA ═══ -->
+  <div id="panel-admin" class="floating-panel fp-center-wide">
+    <div class="fp-header">
+      <h2>⚙ Administrar Sistema</h2>
+      <button class="fp-close-btn" data-close="panel-admin" type="button">✕</button>
+    </div>
+    <div class="fp-body fp-scroll">
+      <!-- Audio Controls -->
+      <div class="og">
+        <div class="og-label">🔊 Audio de Alertas</div>
+        <div class="og-row">
+          <input type="range" min="0" max="100" value="70" class="vol-slider" id="vol-slider" />
+          <button class="btn-sm" id="mute-btn" type="button">🔇 Mute</button>
+        </div>
+      </div>
+      <!-- Auth (integrated password field) -->
+      <div class="og">
+        <div class="og-label">🔑 Acceso Administrador</div>
+        <div id="auth-zone">
+          <div id="auth-login">
+            <div class="auth-form">
+              <div class="auth-row">
+                <input type="password" class="auth-input" id="auth-pwd" placeholder="Contraseña..." />
+                <button class="btn-login" id="auth-btn" type="button">Iniciar Sesión</button>
+              </div>
+              <div class="auth-msg" id="auth-msg"></div>
+            </div>
+          </div>
+          <div id="auth-active" style="display:none">
+            <div class="admin-active">
+              <span>🔓 Modo Administrador Activado</span>
+              <button class="btn-logout" id="logout-btn" type="button">Cerrar Sesión</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Planificación Urbana de Seguridad -->
+      <div class="og">
+        <div class="og-label">📋 Planificación Urbana de Seguridad</div>
+        <div id="plan-panel" style="overflow:visible">
+          <div class="plan-inner-fp">
+            <div class="plan-header">
+              <h3>Distribución de Alarmas Futuras</h3>
+              <button id="plan-add-btn" type="button" class="plan-add" title="Agregar planificación">+ Nueva</button>
+            </div>
+            <div class="plan-table-wrap" id="plan-table-wrap">
+              <table class="plan-table" id="plan-table">
+                <thead><tr><th>Zona / Colonia</th><th>Prioridad</th><th>Fecha Programada</th><th>Estado</th><th></th></tr></thead>
+                <tbody id="plan-tbody"></tbody>
+              </table>
+              <div class="plan-empty" id="plan-empty" style="display:none">
+                <span>📋</span>
+                <p>Sin planificaciones registradas.<br>Agregue una nueva distribución de alarma.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ FLOATING PANEL: SOPORTE TÉCNICO ═══ -->
+  <div id="panel-support" class="floating-panel fp-compact">
+    <div class="fp-header">
+      <h2>📞 Soporte Técnico</h2>
+      <button class="fp-close-btn" data-close="panel-support" type="button">✕</button>
+    </div>
+    <div class="fp-body">
+      <div class="info-card">
+        <div class="info-row">
+          <span class="info-label">👨‍💻 Creador</span>
+          <span class="info-value">Equipo Técnico Municipal</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">📞 Tel</span>
+          <span class="info-value">(612) 123-4567 ext. 210</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">📧 Email</span>
+          <span class="info-value">soporte.vecinal@lapaz.gob.mx</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">🏛 Oficina</span>
+          <span class="info-value">Dirección de Tecnologías de la Información</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ FLOATING PANEL: ACERCA DE ═══ -->
+  <div id="panel-about" class="floating-panel fp-compact fp-about">
+    <div class="fp-header">
+      <h2>ℹ Acerca de</h2>
+      <button class="fp-close-btn" data-close="panel-about" type="button">✕</button>
+    </div>
+    <div class="fp-body">
+      <div class="info-card">
+        <h3 class="info-title">Instrucciones de Uso</h3>
+        <ol class="info-list">
+          <li>Presione <strong>'ADMINISTRAR SISTEMA'</strong> para Ajustes de Volumen y Usuario.</li>
+          <li>Presione <strong>'&laquo; Ver Historial Completo'</strong> para ver Activaciones Recientes.</li>
+          <li>El mapa se actualiza en vivo mediante protocolo de comunicación MQTT.</li>
+          <li>Para emergencias, use el botón de <strong>Alarma Física</strong>.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ FLOATING PANEL: CONTROL DE AUDIO ═══ -->
+  <div id="panel-audio" class="floating-panel fp-audio">
+    <div class="fp-header">
+      <h2>🔊 Control de Audio</h2>
+      <button class="fp-close-btn" data-close="panel-audio" type="button">✕</button>
+    </div>
+    <div class="fp-body">
+      <div class="info-card">
+        <div class="og">
+          <div class="og-label">Volumen de Alertas</div>
+          <div class="og-row">
+            <input type="range" min="0" max="100" value="70" class="vol-slider" id="vol-slider-audio" />
+            <span id="vol-value-audio" style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;min-width:32px;text-align:right">70%</span>
+          </div>
+        </div>
+        <div class="og">
+          <div class="og-row" style="display:flex; gap:8px; margin-top:10px;">
+            <button class="btn-sm" id="mute-btn-audio" type="button" style="flex:1;padding:8px 0;">🔇 Mute</button>
+            <button class="btn-sm" id="test-beep-btn-audio" type="button" style="flex:1;padding:8px 0;">🎵 Probar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://unpkg.com/mqtt@5.10.3/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
